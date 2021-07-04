@@ -32,7 +32,7 @@ desc_file.close()
 
 setup(
     name="Envelopes",
-    version=envelopes.__version__,
+    version="0.4.1",
     packages=['envelopes'],
     test_suite='nose.collector',
     zip_safe=False,
