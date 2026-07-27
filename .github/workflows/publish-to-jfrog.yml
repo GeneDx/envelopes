@@ -1,0 +1,54 @@
+---
+name: Publish to JFrog
+
+# GeneDx mirror (Fabric -> OCI migration). Reconstructs the Fabric-custom
+# `Envelopes==0.4.1` that lived only on pypi.omicia.com (unreachable from GeneDx CI)
+# and publishes it to the GeneDx JFrog PyPI (genedx-python-packages).
+#
+# NOTE on the version: no git ref in the upstream fork (FabricGenomics/envelopes)
+# ever carried __version__ = 0.4.1 -- master and every tag are 0.4/0.3. Fabric
+# published 0.4.1 to their internal index as a re-version of the 0.4 source. We
+# reproduce that here: envelopes/__init__.py is bumped to 0.4.1 and setup.py reads
+# the version from it (this package does NOT use PBR). The app repos pin
+# `Envelopes==0.4.1`, so this satisfies them without touching their requirements.
+#
+# Auth via the private-visibility org secrets JFROG_PYPI_CI_USER / JFROG_PYPI_CI_PASSWORD.
+
+on:
+  workflow_dispatch: {}
+  push:
+    tags:
+      - '[0-9]+.[0-9]+.[0-9]+'
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install build tooling
+        run: |
+          python -m pip install --upgrade pip
+          pip install "setuptools==70.3.0" wheel twine
+
+      - name: Build distribution
+        run: |
+          rm -rf dist
+          python setup.py clean --all sdist bdist_wheel
+          echo "Built:" && ls -l dist
+
+      - name: Publish to GeneDx JFrog PyPI
+        env:
+          TWINE_USERNAME: ${{ secrets.JFROG_PYPI_CI_USER }}
+          TWINE_PASSWORD: ${{ secrets.JFROG_PYPI_CI_PASSWORD }}
+          TWINE_REPOSITORY_URL: https://genedx.jfrog.io/artifactory/api/pypi/genedx-python-packages
+        run: |
+          twine upload --non-interactive dist/*
